@@ -12,7 +12,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Read plugin version
         id: version
@@ -27,7 +27,7 @@ jobs:
           zip -r "${{ steps.version.outputs.zip_name }}" qgis_rf_planner
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v2.6.0
         with:
           tag_name: ${{ steps.version.outputs.tag }}
           name: RF Planner ${{ steps.version.outputs.version }}
