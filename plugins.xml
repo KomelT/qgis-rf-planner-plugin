@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <plugins>
   <pyqgis_plugin name="RF Planner" version="1.0.0">
-    <description><![CDATA[Native QGIS dock widget for RF site planning.]]></description>
-    <about><![CDATA[QGIS frontend for the RF Planner API.]]></about>
+    <description><![CDATA[Native QGIS dock widget for RF site planning]]></description>
+    <about><![CDATA[QGIS frontend for the RF planner API.]]></about>
     <version>1.0.0</version>
     <qgis_minimum_version>4.0</qgis_minimum_version>
     <qgis_maximum_version>4.99</qgis_maximum_version>
@@ -18,6 +18,6 @@
     <experimental>False</experimental>
     <deprecated>False</deprecated>
     <tags><![CDATA[qgis,rf,radio,coverage]]></tags>
-    <changelog><![CDATA[Initial QGIS 4 release with coverage workflow and WMS layer support.]]></changelog>
+    <changelog><![CDATA[Automated release for v1.0.0]]></changelog>
   </pyqgis_plugin>
 </plugins>
