@@ -83,7 +83,11 @@ jobs:
 
       - name: Create plugin zip
         run: |
-          zip -r "${{ steps.version.outputs.zip_name }}" qgis_rf_planner
+          zip -r "${{ steps.version.outputs.zip_name }}" qgis_rf_planner \
+            -x "qgis_rf_planner/__pycache__/*" \
+            -x "qgis_rf_planner/**/*.pyc" \
+            -x "qgis_rf_planner/**/*.pyo" \
+            -x "qgis_rf_planner/**/*.pyd"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2.6.0
