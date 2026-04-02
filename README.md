@@ -11,6 +11,16 @@ The `rf-site-planner/` submodule is kept here as a reference implementation of t
 - Pure frontend plugin logic: request payloads, task polling, layer/result rendering, and project interaction live in QGIS.
 - Backend stays external and can evolve independently.
 
+## Current Plugin Features
+
+- Native QGIS 4 dock widget, automatically placed on the right side.
+- Coverage form organized into sections: Transmitter, Receiver, Environment, and Output.
+- `Pick on map` tool for setting coordinates by clicking in the QGIS canvas.
+- Inline API URL save and test controls, no popup dialog.
+- Save/load coverage parameters for later reuse via QGIS settings.
+- Resizable debug log panel at the bottom of the dock.
+- Coverage flow that submits to the remote API and adds the generated WMS layer to the QGIS project.
+
 ## Recommended Shape
 
 1. Build a QGIS plugin with a dock widget on the right side.
@@ -24,8 +34,9 @@ The quickest development loop is:
 
 - Install the plugin into the QGIS user plugin directory via a symlink or a copy.
 - Use QGIS Plugin Reloader during development so changes can be reloaded without a full restart.
-- Keep the first iteration minimal: a dock widget, API settings dialog, and one button that calls the backend.
-- If UI parity with the Vue app matters more than native widgets at the start, embed the existing frontend in a `QWebEngineView` inside the dock widget and then replace pieces gradually with native PyQt widgets.
+- The plugin opens as a right-docked native panel.
+- Use the `Pick on map` button to choose coordinates, then run coverage and watch the debug panel for request details.
+- Save parameters once and reload them later when you want to reuse a setup.
 
 ## QGIS 4.0 Compatibility
 
@@ -48,7 +59,7 @@ The plugin should be written with forward compatibility in mind:
 
 The native QGIS plugin now lives in [`qgis_rf_planner/`](qgis_rf_planner). It is a pure PyQt/QGIS implementation, with no embedded Vue runtime.
 
-To test it quickly in QGIS, symlink or copy the folder into your QGIS plugin directory, then enable the plugin from the Plugin Manager. The first run will prompt for the API URL, and the dock widget will appear on the right side once opened.
+To test it quickly in QGIS, symlink or copy the folder into your QGIS plugin directory, then enable the plugin from the Plugin Manager. Open the dock from the toolbar or plugin menu, enter the API URL, save it inline, and then pick coordinates or run coverage.
 
 ## Development Reference
 
