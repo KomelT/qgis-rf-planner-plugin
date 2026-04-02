@@ -91,10 +91,31 @@ jobs:
             -x "qgis_rf_planner/**/*.pyo" \
             -x "qgis_rf_planner/**/*.pyd"
 
+      - name: Generate release notes
+        id: notes
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          TAG="${{ steps.version.outputs.tag }}"
+          PREVIOUS_TAG=$(git tag --sort=-creatordate | grep -v "^${TAG}$" | head -n1 || true)
+
+          {
+            echo "# RF Planner v${VERSION}"
+            echo
+            echo "Automatic release summary for ${TAG}."
+            echo
+            echo "## Changes"
+            if [ -n "$PREVIOUS_TAG" ]; then
+              git log --no-merges --pretty=format:'- %s' "${PREVIOUS_TAG}..HEAD"
+            else
+              git log --no-merges --pretty=format:'- %s' -n 20
+            fi
+            echo
+          } > release-notes.md
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2.6.0
         with:
           tag_name: ${{ steps.version.outputs.tag }}
           name: RF Planner ${{ steps.version.outputs.version }}
           files: ${{ steps.version.outputs.zip_name }}
-          generate_release_notes: true
+          body_path: release-notes.md
