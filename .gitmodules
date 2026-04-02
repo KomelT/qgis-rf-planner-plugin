@@ -1,0 +1,3 @@
+[submodule "rf-site-planner"]
+	path = rf-site-planner
+	url = git@github.com:KomelT/rf-site-planner.git

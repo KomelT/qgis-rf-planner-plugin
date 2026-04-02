@@ -1,0 +1,12 @@
+[general]
+name=RF Planner
+description=Native QGIS dock widget for RF site planning
+version=0.1.0
+qgisMinimumVersion=4.0
+author=KomelT
+email=dev@komelt.com
+about=QGIS frontend for the RF planner API.
+category=Web
+homepage=https://github.com/KomelT/rf-site-planner
+tracker=https://github.com/KomelT/rf-site-planner/issues
+repository=https://github.com/KomelT/rf-site-planner
