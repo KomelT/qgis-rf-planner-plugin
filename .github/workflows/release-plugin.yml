@@ -18,9 +18,68 @@ jobs:
         id: version
         run: |
           VERSION=$(grep '^version=' qgis_rf_planner/metadata.txt | head -n1 | cut -d= -f2 | tr -d '[:space:]')
+          if [ -z "$VERSION" ]; then
+            echo "version is missing in qgis_rf_planner/metadata.txt"
+            exit 1
+          fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
           echo "zip_name=qgis_rf_planner-v$VERSION.zip" >> "$GITHUB_OUTPUT"
+
+      - name: Regenerate plugins.xml
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          TAG="${{ steps.version.outputs.tag }}"
+          ZIP_NAME="${{ steps.version.outputs.zip_name }}"
+          REPO_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}"
+          TODAY=$(date -u +%F)
+
+          NAME=$(grep '^name=' qgis_rf_planner/metadata.txt | head -n1 | cut -d= -f2-)
+          DESCRIPTION=$(grep '^description=' qgis_rf_planner/metadata.txt | head -n1 | cut -d= -f2-)
+          ABOUT=$(grep '^about=' qgis_rf_planner/metadata.txt | head -n1 | cut -d= -f2-)
+          AUTHOR=$(grep '^author=' qgis_rf_planner/metadata.txt | head -n1 | cut -d= -f2-)
+          QGIS_MIN=$(grep '^qgisMinimumVersion=' qgis_rf_planner/metadata.txt | head -n1 | cut -d= -f2-)
+
+          cat <<EOF | sed 's/^          //' > plugins.xml
+          <?xml version="1.0" encoding="UTF-8"?>
+          <plugins>
+            <pyqgis_plugin name="$NAME" version="$VERSION">
+              <description><![CDATA[$DESCRIPTION]]></description>
+              <about><![CDATA[$ABOUT]]></about>
+              <version>$VERSION</version>
+              <qgis_minimum_version>$QGIS_MIN</qgis_minimum_version>
+              <qgis_maximum_version>4.99</qgis_maximum_version>
+              <author_name>$AUTHOR</author_name>
+              <homepage><![CDATA[$REPO_URL]]></homepage>
+              <tracker><![CDATA[$REPO_URL/issues]]></tracker>
+              <repository><![CDATA[$REPO_URL]]></repository>
+              <file_name>$ZIP_NAME</file_name>
+              <download_url><![CDATA[$REPO_URL/releases/download/$TAG/$ZIP_NAME]]></download_url>
+              <uploaded_by>$AUTHOR</uploaded_by>
+              <create_date>$TODAY</create_date>
+              <update_date>$TODAY</update_date>
+              <experimental>False</experimental>
+              <deprecated>False</deprecated>
+              <tags><![CDATA[qgis,rf,radio,coverage]]></tags>
+              <changelog><![CDATA[Automated release for $TAG]]></changelog>
+            </pyqgis_plugin>
+          </plugins>
+          EOF
+
+      - name: Commit plugins.xml update
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git diff --quiet -- plugins.xml; then
+            echo "plugins.xml unchanged"
+            exit 0
+          fi
+
+          git add plugins.xml
+          git commit -m "chore: update plugins.xml for v$VERSION"
+          git push
 
       - name: Create plugin zip
         run: |

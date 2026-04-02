@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<plugins>
+  <pyqgis_plugin name="RF Planner" version="1.0.0">
+    <description><![CDATA[Native QGIS dock widget for RF site planning.]]></description>
+    <about><![CDATA[QGIS frontend for the RF Planner API.]]></about>
+    <version>1.0.0</version>
+    <qgis_minimum_version>4.0</qgis_minimum_version>
+    <qgis_maximum_version>4.99</qgis_maximum_version>
+    <author_name>KomelT</author_name>
+    <homepage><![CDATA[https://github.com/KomelT/qgis-rf-planner-plugin]]></homepage>
+    <tracker><![CDATA[https://github.com/KomelT/qgis-rf-planner-plugin/issues]]></tracker>
+    <repository><![CDATA[https://github.com/KomelT/qgis-rf-planner-plugin]]></repository>
+    <file_name>qgis_rf_planner-v1.0.0.zip</file_name>
+    <download_url><![CDATA[https://github.com/KomelT/qgis-rf-planner-plugin/releases/download/v1.0.0/qgis_rf_planner-v1.0.0.zip]]></download_url>
+    <uploaded_by>KomelT</uploaded_by>
+    <create_date>2026-04-02</create_date>
+    <update_date>2026-04-02</update_date>
+    <experimental>False</experimental>
+    <deprecated>False</deprecated>
+    <tags><![CDATA[qgis,rf,radio,coverage]]></tags>
+    <changelog><![CDATA[Initial QGIS 4 release with coverage workflow and WMS layer support.]]></changelog>
+  </pyqgis_plugin>
+</plugins>
