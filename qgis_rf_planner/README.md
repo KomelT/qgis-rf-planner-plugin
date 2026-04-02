@@ -3,6 +3,8 @@
 Native PyQt/QGIS plugin scaffold for RF site planning.
 Targeted at QGIS 4.0.
 
+![RF Planner Plugin Screenshot](../assets/rf-planner-screenshot.png)
+
 ## Current state
 
 - Right-side dock widget that opens on the right automatically

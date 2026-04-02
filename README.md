@@ -2,6 +2,8 @@
 
 This repository is the workspace for the QGIS desktop plugin frontend for RF site planning.
 
+![RF Planner Plugin Screenshot](assets/rf-planner-screenshot.png)
+
 ## Goal
 
 - Right-side QGIS dock widget that feels similar to the current Vue sidebar.
