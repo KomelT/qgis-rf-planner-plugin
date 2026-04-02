@@ -1,0 +1,35 @@
+name: Release QGIS Plugin
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Read plugin version
+        id: version
+        run: |
+          VERSION=$(grep '^version=' qgis_rf_planner/metadata.txt | head -n1 | cut -d= -f2 | tr -d '[:space:]')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          echo "zip_name=qgis_rf_planner-v$VERSION.zip" >> "$GITHUB_OUTPUT"
+
+      - name: Create plugin zip
+        run: |
+          zip -r "${{ steps.version.outputs.zip_name }}" qgis_rf_planner
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: RF Planner ${{ steps.version.outputs.version }}
+          files: ${{ steps.version.outputs.zip_name }}
+          generate_release_notes: true
