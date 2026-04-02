@@ -10,3 +10,4 @@ category=Web
 homepage=https://github.com/KomelT/rf-site-planner
 tracker=https://github.com/KomelT/rf-site-planner/issues
 repository=https://github.com/KomelT/rf-site-planner
+icon=icon.png

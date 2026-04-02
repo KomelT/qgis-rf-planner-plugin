@@ -32,6 +32,7 @@ jobs:
           TAG="${{ steps.version.outputs.tag }}"
           ZIP_NAME="${{ steps.version.outputs.zip_name }}"
           REPO_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}"
+          RAW_URL="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${GITHUB_REF_NAME}"
           TODAY=$(date -u +%F)
 
           NAME=$(grep '^name=' qgis_rf_planner/metadata.txt | head -n1 | cut -d= -f2-)
@@ -53,6 +54,7 @@ jobs:
               <homepage><![CDATA[$REPO_URL]]></homepage>
               <tracker><![CDATA[$REPO_URL/issues]]></tracker>
               <repository><![CDATA[$REPO_URL]]></repository>
+              <icon><![CDATA[$RAW_URL/qgis_rf_planner/icon.png]]></icon>
               <file_name>$ZIP_NAME</file_name>
               <download_url><![CDATA[$REPO_URL/releases/download/$TAG/$ZIP_NAME]]></download_url>
               <uploaded_by>$AUTHOR</uploaded_by>
