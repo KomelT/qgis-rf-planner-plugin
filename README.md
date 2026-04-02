@@ -2,8 +2,6 @@
 
 This repository is the workspace for the QGIS desktop plugin frontend for RF site planning.
 
-The `rf-site-planner/` submodule is kept here as a reference implementation of the existing web app and backend contract. The plugin itself should not reimplement the backend. It should connect to the API over HTTP and provide a QGIS-native workflow around it.
-
 ## Goal
 
 - Right-side QGIS dock widget that feels similar to the current Vue sidebar.
@@ -13,55 +11,38 @@ The `rf-site-planner/` submodule is kept here as a reference implementation of t
 
 ## Current Plugin Features
 
-- Native QGIS 4 dock widget, automatically placed on the right side.
-- Coverage form organized into sections: Transmitter, Receiver, Environment, and Output.
-- `Pick on map` tool for setting coordinates by clicking in the QGIS canvas.
-- Inline API URL save and test controls, no popup dialog.
-- Save/load coverage parameters for later reuse via QGIS settings.
-- Resizable debug log panel at the bottom of the dock.
-- Coverage flow that submits to the remote API and adds the generated WMS layer to the QGIS project.
+- Native QGIS 4 plugin panel that auto-docks to the right side.
+- Coverage UI organized in sections: Transmitter, Receiver, Environment, and Output.
+- `Pick on map` coordinate pipette directly in the Transmitter section.
+- Inline API base URL save/test in the panel (no popup settings workflow).
+- Coverage parameter persistence with `Save parameters` and `Load parameters`.
+- Large resizable debug panel for request/response traces and status messages.
+- Coverage task flow: submit -> poll task status -> add generated WMS layer to QGIS.
+- Plugin icon integrated for plugin manager and plugin repository metadata.
 
-## Recommended Shape
+## Install Options
 
-1. Build a QGIS plugin with a dock widget on the right side.
-2. Persist the API base URL in QGIS settings after the first launch.
-3. Reuse the Vue app as a UI reference, but keep the QGIS plugin as the source of truth for the desktop workflow.
-4. Start with the smallest visible slice: connect settings, a sidebar shell, and one API action.
+### Option 1: Plugin Repository (recommended for users)
 
-## Fastest Way To See Progress In QGIS
+Use this when you want updates through QGIS Plugin Manager from your hosted `plugins.xml`.
 
-The quickest development loop is:
+1. Host [plugins.xml](plugins.xml) and release ZIP files at stable URLs.
+2. In QGIS, open `Plugins -> Manage and Install Plugins... -> Settings`.
+3. Add a new repository URL pointing to your hosted `plugins.xml`.
+4. Search for `RF Planner` and install/update from the repository list.
 
-- Install the plugin into the QGIS user plugin directory via a symlink or a copy.
-- Use QGIS Plugin Reloader during development so changes can be reloaded without a full restart.
-- The plugin opens as a right-docked native panel.
-- Use the `Pick on map` button to choose coordinates, then run coverage and watch the debug panel for request details.
-- Save parameters once and reload them later when you want to reuse a setup.
+### Option 2: Install From ZIP
 
-## QGIS 4.0 Compatibility
+Use this when you want a simple offline or one-time install.
 
-The plugin should be written with forward compatibility in mind:
-
-- Prefer `PyQt6`-compatible patterns.
-- Use `qgis.PyQt` imports instead of direct Qt bindings where possible.
-- Avoid deprecated QGIS APIs and old-style Qt patterns that are likely to break across major versions.
-- The plugin is now targeted at QGIS 4.0. Older 3.x builds are no longer the primary compatibility target.
-
-## Suggested First Milestones
-
-- Create the plugin scaffold and load it in QGIS.
-- Add the API URL settings dialog.
-- Add the right dock sidebar with the same information architecture as the Vue app.
-- Add a working coverage or LOS request flow.
-- Render results back into QGIS as layers or overlays.
-
-## Native Plugin Scaffold
-
-The native QGIS plugin now lives in [`qgis_rf_planner/`](qgis_rf_planner). It is a pure PyQt/QGIS implementation, with no embedded Vue runtime.
-
-To test it quickly in QGIS, symlink or copy the folder into your QGIS plugin directory, then enable the plugin from the Plugin Manager. Open the dock from the toolbar or plugin menu, enter the API URL, save it inline, and then pick coordinates or run coverage.
+1. Download the latest plugin ZIP release asset (for example `qgis_rf_planner-vX.Y.Z.zip`).
+2. In QGIS, open `Plugins -> Manage and Install Plugins...`.
+3. Choose `Install from ZIP`.
+4. Select the downloaded ZIP file and install.
 
 ## Development Reference
+
+The `rf-site-planner/` submodule is kept here as a reference implementation of the existing web app and backend contract. The plugin itself should not reimplement the backend. It should connect to the API over HTTP and provide a QGIS-native workflow around it.
 
 - Vue app reference: [`rf-site-planner/app`](rf-site-planner/app)
 - API reference: [`rf-site-planner/api`](rf-site-planner/api)
