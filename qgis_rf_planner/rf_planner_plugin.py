@@ -34,6 +34,8 @@ class RFPlannerPlugin:
         self.iface.addPluginToMenu("RF Planner", self.action)
         self.iface.addToolBarIcon(self.action)
 
+        self._ensure_dock_widget()
+
         self.api_client.connectionSucceeded.connect(self._on_connection_success)
         self.api_client.connectionFailed.connect(self._on_connection_failed)
         self.api_client.coverageSubmitted.connect(self._on_coverage_submitted)
@@ -51,33 +53,7 @@ class RFPlannerPlugin:
             self.dock_widget = None
 
     def show_dock_widget(self):
-        if self.dock_widget is None:
-            self.dock_widget = QDockWidget("RF Planner", self.iface.mainWindow())
-            self.dock_widget.setObjectName("RFPlannerDock")
-
-            content = DockWidget(self.dock_widget)
-            content.requestSettings.connect(self._save_api_url_from_dock)
-            content.testConnectionRequested.connect(self.api_client.test_connection)
-            content.apiUrlChanged.connect(PluginSettings.set_api_url)
-            content.pickCoordinatesRequested.connect(self._start_coordinate_pick)
-            content.runCoverageRequested.connect(self.run_coverage)
-            content.saveParametersRequested.connect(self._save_coverage_parameters)
-            content.loadParametersRequested.connect(self._load_coverage_parameters)
-            content.set_api_url(PluginSettings.get_api_url())
-            if not PluginSettings.get_api_url():
-                content.set_status("Set API base URL and click Save.", is_error=True)
-
-            saved_params = PluginSettings.get_coverage_parameters()
-            if saved_params:
-                content.set_coverage_parameters(saved_params)
-                content.append_debug("Loaded saved coverage parameters.")
-
-            self.dock_widget.setWidget(content)
-            self.dock_widget.setAllowedAreas(
-                Qt.DockWidgetArea.LeftDockWidgetArea
-                | Qt.DockWidgetArea.RightDockWidgetArea
-            )
-            self.iface.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.dock_widget)
+        self._ensure_dock_widget()
 
         # Keep plugin UX deterministic: opening the panel always docks it on the right.
         if self.dock_widget.isFloating():
@@ -240,6 +216,44 @@ class RFPlannerPlugin:
             return None
         return self.dock_widget.widget()
 
+    def _ensure_dock_widget(self):
+        if self.dock_widget is not None:
+            return
+
+        self.dock_widget = QDockWidget("RF Planner", self.iface.mainWindow())
+        self.dock_widget.setObjectName("RFPlannerDock")
+
+        content = DockWidget(self.dock_widget)
+        content.requestSettings.connect(self._save_api_url_from_dock)
+        content.testConnectionRequested.connect(self.api_client.test_connection)
+        content.apiUrlChanged.connect(PluginSettings.set_api_url)
+        content.pickCoordinatesRequested.connect(self._start_coordinate_pick)
+        content.runCoverageRequested.connect(self.run_coverage)
+        content.saveParametersRequested.connect(self._save_coverage_parameters)
+        content.loadParametersRequested.connect(self._load_coverage_parameters)
+        content.saveScenarioRequested.connect(self._save_scenario)
+        content.loadScenarioRequested.connect(self._load_scenario)
+        content.deleteScenarioRequested.connect(self._delete_scenario)
+        content.set_api_url(PluginSettings.get_api_url())
+        if not PluginSettings.get_api_url():
+            content.set_status("Set API base URL and click Save.", is_error=True)
+        self.dock_widget.setWidget(content)
+        self.dock_widget.setAllowedAreas(
+            Qt.DockWidgetArea.LeftDockWidgetArea
+            | Qt.DockWidgetArea.RightDockWidgetArea
+        )
+        self.iface.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.dock_widget)
+
+        self._refresh_scenarios()
+
+        if self._restore_last_scenario():
+            content.append_debug("Loaded last active scenario for this project.")
+
+        saved_params = PluginSettings.get_coverage_parameters()
+        if saved_params and not content.current_scenario_name():
+            content.set_coverage_parameters(saved_params)
+            content.append_debug("Loaded saved coverage parameters.")
+
     def _restore_previous_map_tool(self):
         canvas = self.iface.mapCanvas()
         if self._previous_map_tool is not None:
@@ -255,6 +269,16 @@ class RFPlannerPlugin:
     def _save_coverage_parameters(self, params: dict) -> None:
         content = self._dock_content()
         PluginSettings.set_coverage_parameters(params)
+        scenario_name = content.current_scenario_name() if content is not None else ""
+        if scenario_name:
+            try:
+                PluginSettings.save_scenario(scenario_name, params)
+                self._refresh_scenarios(selected=scenario_name)
+            except ValueError as error:
+                if content is not None:
+                    content.set_status(str(error), is_error=True)
+                    content.append_debug(f"Scenario save failed: {error}")
+                return
         if content is not None:
             content.set_status("Coverage parameters saved.")
             content.append_debug("Coverage parameters saved to QGIS settings.")
@@ -273,3 +297,90 @@ class RFPlannerPlugin:
         content.set_coverage_parameters(params)
         content.set_status("Coverage parameters loaded.")
         content.append_debug("Coverage parameters loaded from QGIS settings.")
+
+    def _save_scenario(self, scenario_name: str, params: object) -> None:
+        content = self._dock_content()
+        name = PluginSettings.normalize_scenario_name(scenario_name)
+        if not name:
+            if content is not None:
+                content.set_status("Scenario name is empty.", is_error=True)
+                content.append_debug("Scenario save aborted: empty name.")
+            return
+
+        try:
+            PluginSettings.save_scenario(name, dict(params))
+            self._refresh_scenarios(selected=name)
+            if content is not None:
+                content.set_current_scenario_name(name)
+                content.set_status(f"Scenario saved: {name}")
+                content.append_debug(f"Scenario saved: {name}")
+        except ValueError as error:
+            if content is not None:
+                content.set_status(str(error), is_error=True)
+                content.append_debug(f"Scenario save failed: {error}")
+
+    def _load_scenario(self, scenario_name: str) -> None:
+        content = self._dock_content()
+        name = PluginSettings.normalize_scenario_name(scenario_name)
+        if not name:
+            if content is not None:
+                content.set_status("Select a scenario to load.", is_error=True)
+            return
+
+        params = PluginSettings.get_scenario(name)
+        if not params:
+            if content is not None:
+                content.set_status(f"Scenario not found: {name}", is_error=True)
+                content.append_debug(f"Load failed: scenario not found ({name})")
+            return
+
+        if content is not None:
+            content.set_coverage_parameters(params)
+            content.set_current_scenario_name(name)
+            content.set_status(f"Scenario loaded: {name}")
+            content.append_debug(f"Scenario loaded: {name}")
+        PluginSettings.set_last_scenario_name(name)
+
+    def _delete_scenario(self, scenario_name: str) -> None:
+        content = self._dock_content()
+        name = PluginSettings.normalize_scenario_name(scenario_name)
+        if not name:
+            if content is not None:
+                content.set_status("Select a scenario to delete.", is_error=True)
+            return
+
+        PluginSettings.delete_scenario(name)
+        self._refresh_scenarios(selected="")
+        if content is not None:
+            content.set_scenario_dirty(False)
+            content.set_status(f"Scenario deleted: {name}")
+            content.append_debug(f"Scenario deleted: {name}")
+
+    def _refresh_scenarios(self, selected: str = "") -> None:
+        content = self._dock_content()
+        if content is None:
+            return
+
+        scenario_names = PluginSettings.list_scenarios()
+        last = selected.strip() or PluginSettings.get_last_scenario_name()
+        content.set_scenario_names(scenario_names, selected=last)
+        if last and last in scenario_names:
+            PluginSettings.set_last_scenario_name(last)
+
+    def _restore_last_scenario(self) -> bool:
+        content = self._dock_content()
+        if content is None:
+            return False
+
+        last = PluginSettings.get_last_scenario_name().strip()
+        if not last:
+            return False
+
+        params = PluginSettings.get_scenario(last)
+        if not params:
+            return False
+
+        content.set_coverage_parameters(params)
+        content.set_current_scenario_name(last)
+        return True
+

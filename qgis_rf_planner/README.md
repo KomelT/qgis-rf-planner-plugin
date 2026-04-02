@@ -8,6 +8,7 @@ Targeted at QGIS 4.0.
 ## Current state
 
 - Right-side dock widget that opens on the right automatically
+- Project-scoped named scenarios for multiple coverage setups
 - Coverage form split into Transmitter, Receiver, Environment, and Output sections
 - `Pick on map` coordinate pipette
 - Inline API URL save and test controls

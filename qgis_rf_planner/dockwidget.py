@@ -28,10 +28,15 @@ class DockWidget(QWidget):
     pickCoordinatesRequested = pyqtSignal()
     saveParametersRequested = pyqtSignal(dict)
     loadParametersRequested = pyqtSignal()
+    saveScenarioRequested = pyqtSignal(str, object)
+    loadScenarioRequested = pyqtSignal(str)
+    deleteScenarioRequested = pyqtSignal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("RFPlannerDockWidget")
+        self._scenario_dirty = False
+        self._suspend_dirty_tracking = False
 
         self._api_url = QLineEdit(self)
         self._api_url.setPlaceholderText("https://rf-planner.komelt.dev/api/")
@@ -39,6 +44,15 @@ class DockWidget(QWidget):
 
         self._status_label = QLabel("Set the API URL to start.", self)
         self._status_label.setWordWrap(True)
+
+        self._scenario_combo = QComboBox(self)
+        self._scenario_combo.setEditable(True)
+        self._scenario_combo.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
+        self._scenario_combo.setPlaceholderText("Scenario name")
+
+        self._scenario_save_button = QPushButton("Save scenario", self)
+        self._scenario_load_button = QPushButton("Load scenario", self)
+        self._scenario_delete_button = QPushButton("Delete scenario", self)
 
         self._debug_log = QPlainTextEdit(self)
         self._debug_log.setReadOnly(True)
@@ -92,7 +106,34 @@ class DockWidget(QWidget):
         self._coverage_itm_mode = QCheckBox("Use ITM mode", self)
         self._coverage_itm_mode.setChecked(True)
 
+        self._trackable_parameter_widgets = [
+            self._coverage_lat,
+            self._coverage_lon,
+            self._coverage_tx_height,
+            self._coverage_tx_power,
+            self._coverage_tx_gain,
+            self._coverage_tx_loss,
+            self._coverage_rx_height,
+            self._coverage_rx_loss,
+            self._coverage_radius,
+            self._coverage_frequency,
+            self._coverage_colormap,
+            self._coverage_clutter_height,
+            self._coverage_ground_dielectric,
+            self._coverage_ground_conductivity,
+            self._coverage_atmosphere_bending,
+            self._coverage_situation_fraction,
+            self._coverage_time_fraction,
+            self._coverage_radio_climate,
+            self._coverage_polarization,
+            self._coverage_min_dbm,
+            self._coverage_max_dbm,
+            self._coverage_high_resolution,
+            self._coverage_itm_mode,
+        ]
+
         self._build_ui()
+        self._connect_dirty_tracking()
 
     def _build_ui(self) -> None:
         root = QVBoxLayout(self)
@@ -140,6 +181,29 @@ class DockWidget(QWidget):
         button_row.addWidget(self._test_button)
         api_layout.addLayout(button_row)
         api_layout.addWidget(self._status_label)
+
+        scenario_card = self._card(content)
+        scenario_layout = QVBoxLayout(scenario_card)
+        scenario_layout.setSpacing(8)
+        scenario_layout.addWidget(QLabel("Project Scenarios", scenario_card))
+        scenario_layout.addWidget(self._scenario_combo)
+
+        scenario_button_row = QHBoxLayout()
+        self._scenario_save_button.clicked.connect(
+            lambda: self.saveScenarioRequested.emit(
+                self.current_scenario_name(), self.coverage_parameters()
+            )
+        )
+        self._scenario_load_button.clicked.connect(
+            lambda: self.loadScenarioRequested.emit(self._scenario_combo.currentText().strip())
+        )
+        self._scenario_delete_button.clicked.connect(
+            lambda: self.deleteScenarioRequested.emit(self._scenario_combo.currentText().strip())
+        )
+        scenario_button_row.addWidget(self._scenario_save_button)
+        scenario_button_row.addWidget(self._scenario_load_button)
+        scenario_button_row.addWidget(self._scenario_delete_button)
+        scenario_layout.addLayout(scenario_button_row)
 
         coverage_card = self._card(content)
         coverage_layout = QVBoxLayout(coverage_card)
@@ -211,6 +275,7 @@ class DockWidget(QWidget):
         content_layout.addWidget(title)
         content_layout.addWidget(subtitle)
         content_layout.addWidget(api_card)
+        content_layout.addWidget(scenario_card)
         content_layout.addWidget(coverage_card)
         content_layout.addStretch(1)
 
@@ -264,6 +329,22 @@ class DockWidget(QWidget):
         row.addWidget(widget)
         return row
 
+    def _connect_dirty_tracking(self) -> None:
+        for widget in self._trackable_parameter_widgets:
+            if isinstance(widget, QDoubleSpinBox):
+                widget.valueChanged.connect(self._on_parameter_edited)
+            elif isinstance(widget, QComboBox):
+                widget.currentTextChanged.connect(self._on_parameter_edited)
+            elif isinstance(widget, QCheckBox):
+                widget.toggled.connect(self._on_parameter_edited)
+
+    def _on_parameter_edited(self, *_args) -> None:
+        if self._suspend_dirty_tracking:
+            return
+
+        if self.current_scenario_name():
+            self.set_scenario_dirty(True)
+
     def set_api_url(self, api_url: str) -> None:
         self._api_url.setText(api_url)
 
@@ -313,6 +394,8 @@ class DockWidget(QWidget):
         if not params:
             return
 
+        self._suspend_dirty_tracking = True
+
         self._coverage_lat.setValue(float(params.get("lat", self._coverage_lat.value())))
         self._coverage_lon.setValue(float(params.get("lon", self._coverage_lon.value())))
         self._coverage_tx_height.setValue(float(params.get("tx_height", self._coverage_tx_height.value())))
@@ -345,6 +428,55 @@ class DockWidget(QWidget):
 
         self._coverage_high_resolution.setChecked(bool(params.get("high_resolution", self._coverage_high_resolution.isChecked())))
         self._coverage_itm_mode.setChecked(bool(params.get("itm_mode", self._coverage_itm_mode.isChecked())))
+        self._suspend_dirty_tracking = False
+        self.set_scenario_dirty(False)
+
+    def set_scenario_names(self, scenario_names: list[str], selected: str = "") -> None:
+        self._scenario_combo.blockSignals(True)
+        self._scenario_combo.clear()
+        self._scenario_combo.addItems(scenario_names)
+
+        target = self._normalize_scenario_name(selected)
+        if target:
+            index = self._scenario_combo.findText(target)
+            if index >= 0:
+                self._scenario_combo.setCurrentIndex(index)
+            else:
+                self._scenario_combo.setEditText(target)
+        elif scenario_names:
+            self._scenario_combo.setCurrentIndex(0)
+
+        self._scenario_combo.blockSignals(False)
+        self.set_scenario_dirty(self._scenario_dirty)
+
+    def current_scenario_name(self) -> str:
+        return self._normalize_scenario_name(self._scenario_combo.currentText())
+
+    def set_current_scenario_name(self, scenario_name: str) -> None:
+        clean_name = self._normalize_scenario_name(scenario_name)
+        index = self._scenario_combo.findText(clean_name)
+        if index >= 0:
+            self._scenario_combo.setCurrentIndex(index)
+        else:
+            self._scenario_combo.setEditText(clean_name)
+        self.set_scenario_dirty(False)
+
+    def set_scenario_dirty(self, is_dirty: bool) -> None:
+        self._scenario_dirty = bool(is_dirty)
+        current_name = self.current_scenario_name()
+        if not current_name:
+            return
+
+        display_name = f"{current_name}*" if self._scenario_dirty else current_name
+        self._scenario_combo.blockSignals(True)
+        self._scenario_combo.setEditText(display_name)
+        self._scenario_combo.blockSignals(False)
+
+    def _normalize_scenario_name(self, value: str) -> str:
+        normalized = value.strip()
+        if normalized.endswith("*"):
+            normalized = normalized[:-1].strip()
+        return normalized
 
     def set_status(self, message: str, is_error: bool = False) -> None:
         color = "#f87171" if is_error else "#86efac"
