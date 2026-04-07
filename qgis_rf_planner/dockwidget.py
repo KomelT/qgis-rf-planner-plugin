@@ -105,6 +105,8 @@ class DockWidget(QWidget):
         self._coverage_high_resolution.setChecked(False)
         self._coverage_itm_mode = QCheckBox("Use ITM mode", self)
         self._coverage_itm_mode.setChecked(True)
+        self._coverage_download = QCheckBox("Download after coverage", self)
+        self._coverage_download.setChecked(False)
 
         self._trackable_parameter_widgets = [
             self._coverage_lat,
@@ -130,6 +132,7 @@ class DockWidget(QWidget):
             self._coverage_max_dbm,
             self._coverage_high_resolution,
             self._coverage_itm_mode,
+            self._coverage_download,
         ]
 
         self._build_ui()
@@ -249,6 +252,7 @@ class DockWidget(QWidget):
         output_form.addRow("Max dBm", self._coverage_max_dbm)
         output_form.addRow(self._coverage_high_resolution)
         output_form.addRow(self._coverage_itm_mode)
+        output_form.addRow(self._coverage_download)
 
         coverage_layout.addWidget(transmitter_group)
         coverage_layout.addWidget(receiver_group)
@@ -350,6 +354,9 @@ class DockWidget(QWidget):
 
     def api_url(self) -> str:
         return self._api_url.text().strip()
+
+    def should_download_coverage(self) -> bool:
+        return self._coverage_download.isChecked()
 
     def coverage_location(self) -> tuple[float, float]:
         return self._coverage_lat.value(), self._coverage_lon.value()

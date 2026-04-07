@@ -1,5 +1,10 @@
 """Main QGIS plugin entry point for RF Planner."""
 
+import os
+import threading
+import urllib.request
+from urllib.parse import urlencode
+
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtGui import QAction
 from qgis.PyQt.QtWidgets import QDockWidget
@@ -10,6 +15,7 @@ from qgis.core import (
     QgsRasterLayer,
     QgsPointXY,
     QgsMessageLog,
+    QgsLayerTreeGroup,
     Qgis,
 )
 from qgis.gui import QgsMapToolEmitPoint
@@ -167,7 +173,10 @@ class RFPlannerPlugin:
             content.set_status(f"Coverage completed: {task_id}")
             content.append_debug(f"Coverage completed: {task_id}")
 
-        self._add_coverage_wms_layer(task_id)
+        if content is not None and content.should_download_coverage():
+            self._download_and_save_coverage(task_id)
+        else:
+            self._add_coverage_wms_layer(task_id)
 
     def _on_coverage_failed(self, message: str) -> None:
         content = self._dock_content()
@@ -210,6 +219,141 @@ class RFPlannerPlugin:
             )
             content.append_debug("WMS layer validation failed in QGIS.")
         self._log_debug(f"WMS layer validation failed for task {task_id}.")
+
+    def _download_and_save_coverage(self, task_id: str) -> None:
+        """Download coverage as GeoTIFF and save to radio-planning folder."""
+        threading.Thread(
+            target=self._download_coverage_worker,
+            args=(task_id,),
+            daemon=True,
+        ).start()
+
+    def _download_coverage_worker(self, task_id: str) -> None:
+        """Worker thread for downloading coverage file."""
+        import math
+        from urllib.parse import urlparse
+        
+        try:
+            content = self._dock_content()
+            project = QgsProject.instance()
+            project_path = project.fileName()
+            
+            if not project_path:
+                if content is not None:
+                    content.set_status("Cannot download: project not saved.", is_error=True)
+                    content.append_debug("Project must be saved before downloading coverage.")
+                return
+            
+            # Create radio-planning folder
+            project_dir = os.path.dirname(project_path)
+            radio_planning_dir = os.path.join(project_dir, "radio-planning")
+            os.makedirs(radio_planning_dir, exist_ok=True)
+            
+            coverage_file = os.path.join(radio_planning_dir, f"coverage_{task_id}.tif")
+            
+            # Get coverage parameters for bounding box calculation
+            if content is None:
+                return
+                
+            lat, lon = content.coverage_location()
+            radius = content._coverage_radius.value()  # radius in km
+            
+            # Calculate bounding box from radius
+            # Approximate: 1 degree ≈ 111 km
+            radius_degrees = radius / 111.0
+            lat_offset = radius_degrees
+            lon_offset = radius_degrees / math.cos(math.radians(lat)) if abs(lat) < 85 else radius_degrees
+            
+            bbox_south = max(-90, lat - lat_offset)
+            bbox_north = min(90, lat + lat_offset)
+            bbox_west = max(-180, lon - lon_offset)
+            bbox_east = min(180, lon + lon_offset)
+            
+            # Build WMS GetMap URL for GeoTIFF
+            geoserver_base_url = PluginSettings.get_geoserver_base_url()
+            if not geoserver_base_url:
+                if content is not None:
+                    content.append_debug("No geoserver base URL available for download.")
+                return
+            
+            params = {
+                "service": "WMS",
+                "version": "1.1.0",
+                "request": "GetMap",
+                "layers": f"RF-SITE-PLANNER:{task_id}",
+                "bbox": f"{bbox_west},{bbox_south},{bbox_east},{bbox_north}",
+                "width": "768",
+                "height": "534",
+                "srs": "EPSG:4326",
+                "styles": "",
+                "format": "image/geotiff",
+            }
+            query_string = urlencode(params)
+            wms_url = f"{geoserver_base_url}/RF-SITE-PLANNER/wms?{query_string}"
+            
+            content.append_debug(f"Downloading coverage from: {wms_url}")
+            
+            # Download with proper headers (to bypass WAF/edge layers)
+            request = urllib.request.Request(url=wms_url, method="GET")
+            parsed = urlparse(wms_url)
+            origin = f"{parsed.scheme}://{parsed.netloc}"
+            
+            request.add_header(
+                "User-Agent",
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            )
+            request.add_header("Accept", "*/*")
+            request.add_header("Origin", origin)
+            request.add_header("Referer", origin + "/")
+            
+            with urllib.request.urlopen(request, timeout=60) as response:
+                with open(coverage_file, "wb") as f:
+                    f.write(response.read())
+            
+            content.append_debug(f"Coverage saved to: {coverage_file}")
+            
+            # Add to QGIS with group
+            self._add_downloaded_coverage_layer(coverage_file, task_id)
+            
+        except Exception as e:
+            self._log_debug(f"Error downloading coverage: {e}")
+            content = self._dock_content()
+            if content is not None:
+                content.set_status(f"Failed to download coverage: {e}", is_error=True)
+                content.append_debug(f"Download error: {e}")
+
+    def _add_downloaded_coverage_layer(self, file_path: str, task_id: str) -> None:
+        """Add downloaded coverage to QGIS with Radio planning group."""
+        try:
+            project = QgsProject.instance()
+            root = project.layerTreeRoot()
+            
+            # Find or create "Radio planning" group
+            radio_group = None
+            for child in root.children():
+                if isinstance(child, QgsLayerTreeGroup) and child.name() == "Radio planning":
+                    radio_group = child
+                    break
+            
+            if radio_group is None:
+                radio_group = root.insertGroup(0, "Radio planning")
+            
+            # Add raster layer
+            layer = QgsRasterLayer(file_path, f"Coverage {task_id}", "gdal")
+            if layer.isValid():
+                project.addMapLayer(layer, addToLegend=False)
+                radio_group.addLayer(layer)
+                self._log_debug(f"Coverage layer added to 'Radio planning' group: {task_id}")
+                
+                content = self._dock_content()
+                if content is not None:
+                    content.set_status(f"Coverage downloaded and added to map.")
+            else:
+                self._log_debug(f"Downloaded coverage layer validation failed: {file_path}")
+                
+        except Exception as e:
+            self._log_debug(f"Error adding downloaded layer: {e}")
 
     def _dock_content(self):
         if self.dock_widget is None:
