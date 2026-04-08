@@ -1,7 +1,7 @@
 [general]
 name=RF Planner
 description=Native QGIS dock widget for RF site planning
-version=1.1.0
+version=1.2.0
 qgisMinimumVersion=4.0
 author=KomelT
 email=dev@komelt.com

@@ -235,16 +235,17 @@ class RFPlannerPlugin:
         
         try:
             content = self._dock_content()
+
             project = QgsProject.instance()
             project_path = project.fileName()
-            
+
             if not project_path:
                 if content is not None:
                     content.set_status("Cannot download: project not saved.", is_error=True)
                     content.append_debug("Project must be saved before downloading coverage.")
                 return
-            
-            # Create radio-planning folder
+
+            # Create radio-planning folder in the project directory
             project_dir = os.path.dirname(project_path)
             radio_planning_dir = os.path.join(project_dir, "radio-planning")
             os.makedirs(radio_planning_dir, exist_ok=True)
@@ -348,7 +349,7 @@ class RFPlannerPlugin:
                 
                 content = self._dock_content()
                 if content is not None:
-                    content.set_status(f"Coverage downloaded and added to map.")
+                    content.set_status("Coverage downloaded and added to map.")
             else:
                 self._log_debug(f"Downloaded coverage layer validation failed: {file_path}")
                 
