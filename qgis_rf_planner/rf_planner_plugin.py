@@ -2,6 +2,7 @@
 
 import os
 import threading
+import time
 import urllib.request
 from urllib.parse import urlencode
 
@@ -48,8 +49,14 @@ class RFPlannerPlugin:
         self.api_client.coverageCompleted.connect(self._on_coverage_completed)
         self.api_client.coverageFailed.connect(self._on_coverage_failed)
         self.api_client.debugMessage.connect(self._on_debug_message)
+        QgsProject.instance().layerWillBeRemoved.connect(self._on_layer_will_be_removed)
+        self._cleanup_orphan_radio_planning_files_on_startup()
 
     def unload(self):
+        try:
+            QgsProject.instance().layerWillBeRemoved.disconnect(self._on_layer_will_be_removed)
+        except TypeError:
+            pass
         if self.action is not None:
             self.iface.removePluginMenu("RF Planner", self.action)
             self.iface.removeToolBarIcon(self.action)
@@ -355,6 +362,142 @@ class RFPlannerPlugin:
                 
         except Exception as e:
             self._log_debug(f"Error adding downloaded layer: {e}")
+
+    def _on_layer_will_be_removed(self, layer_ref) -> None:
+        """When a layer from 'Radio planning' is removed, delete its file from disk."""
+        project = QgsProject.instance()
+        if isinstance(layer_ref, str):
+            layer_id = layer_ref
+            layer = project.mapLayer(layer_id)
+        else:
+            layer = layer_ref
+            layer_id = layer.id() if layer is not None and hasattr(layer, "id") else ""
+
+        if layer is None:
+            return
+
+        if not self._is_layer_in_radio_planning_group(layer_id):
+            return
+
+        source_path = self._local_path_from_layer_source(layer.source())
+        if not source_path:
+            return
+        if not os.path.isfile(source_path):
+            return
+        radio_planning_dir = self._project_radio_planning_dir()
+        if not radio_planning_dir:
+            return
+        if not self._is_path_in_directory(source_path, radio_planning_dir):
+            return
+
+        try:
+            os.remove(source_path)
+            self._log_debug(f"Deleted coverage file after layer removal: {source_path}")
+        except Exception as error:
+            self._log_debug(f"Could not delete coverage file '{source_path}': {error}")
+
+    def _cleanup_orphan_radio_planning_files_on_startup(self) -> None:
+        """Delete files from 'radio-planning' folder that are not present in Radio planning group."""
+        project = QgsProject.instance()
+        radio_planning_dir = self._project_radio_planning_dir()
+        if not radio_planning_dir:
+            return
+        if not os.path.isdir(radio_planning_dir):
+            return
+
+        normalized_radio_planning_dir = os.path.normcase(os.path.abspath(radio_planning_dir))
+        tracked_paths = set()
+        in_use_paths = set()
+
+        for layer in project.mapLayers().values():
+            source_path = self._local_path_from_layer_source(layer.source())
+            if source_path:
+                in_use_paths.add(os.path.normcase(os.path.abspath(source_path)))
+
+            layer_id = layer.id() if layer is not None and hasattr(layer, "id") else ""
+            if not layer_id or not self._is_layer_in_radio_planning_group(layer_id):
+                continue
+
+            if not source_path:
+                continue
+
+            normalized_source = os.path.normcase(os.path.abspath(source_path))
+            if os.path.dirname(normalized_source) == normalized_radio_planning_dir:
+                tracked_paths.add(normalized_source)
+
+        removed_count = 0
+        for entry_name in os.listdir(radio_planning_dir):
+            entry_path = os.path.join(radio_planning_dir, entry_name)
+            if not os.path.isfile(entry_path):
+                continue
+            if not entry_name.lower().endswith((".tif", ".tiff")):
+                continue
+
+            normalized_entry = os.path.normcase(os.path.abspath(entry_path))
+            if normalized_entry in tracked_paths:
+                continue
+            if normalized_entry in in_use_paths:
+                self._log_debug(f"Startup cleanup skipped in-use file: {entry_path}")
+                continue
+
+            if self._delete_file_with_retry(entry_path):
+                removed_count += 1
+
+        if removed_count:
+            self._log_debug(
+                f"Startup cleanup finished: removed {removed_count} orphan file(s) from radio-planning."
+            )
+
+    def _delete_file_with_retry(self, path: str, retries: int = 3, delay_seconds: float = 0.4) -> bool:
+        for attempt in range(1, retries + 1):
+            try:
+                os.remove(path)
+                self._log_debug(f"Startup cleanup removed orphan coverage file: {path}")
+                return True
+            except PermissionError as error:
+                # Windows file-lock race (e.g. scanner/indexer); retry a few times.
+                win_error = getattr(error, "winerror", None)
+                if win_error == 32 and attempt < retries:
+                    time.sleep(delay_seconds)
+                    continue
+                self._log_debug(f"Startup cleanup could not remove '{path}': {error}")
+                return False
+            except Exception as error:
+                self._log_debug(f"Startup cleanup could not remove '{path}': {error}")
+                return False
+        return False
+
+    def _project_radio_planning_dir(self) -> str:
+        project_path = QgsProject.instance().fileName()
+        if not project_path:
+            return ""
+        return os.path.join(os.path.dirname(project_path), "radio-planning")
+
+    def _is_path_in_directory(self, path: str, directory: str) -> bool:
+        normalized_path = os.path.normcase(os.path.abspath(path))
+        normalized_dir = os.path.normcase(os.path.abspath(directory))
+        return os.path.dirname(normalized_path) == normalized_dir
+
+    def _is_layer_in_radio_planning_group(self, layer_id: str) -> bool:
+        root = QgsProject.instance().layerTreeRoot()
+        layer_node = root.findLayer(layer_id)
+        if layer_node is None:
+            return False
+
+        parent = layer_node.parent()
+        while parent is not None:
+            if isinstance(parent, QgsLayerTreeGroup) and parent.name() == "Radio planning":
+                return True
+            parent = parent.parent()
+        return False
+
+    def _local_path_from_layer_source(self, source: str) -> str:
+        if not source:
+            return ""
+        source_path = source.split("|", 1)[0].strip().strip('"').strip("'")
+        if source_path.lower().startswith("file://"):
+            source_path = source_path[7:]
+        return source_path
 
     def _dock_content(self):
         if self.dock_widget is None:
