@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <plugins>
-  <pyqgis_plugin name="RF Planner" version="1.1.0">
+  <pyqgis_plugin name="RF Planner" version="1.2.0">
     <description><![CDATA[Native QGIS dock widget for RF site planning]]></description>
     <about><![CDATA[QGIS frontend for the RF planner API.]]></about>
-    <version>1.1.0</version>
+    <version>1.2.0</version>
     <qgis_minimum_version>4.0</qgis_minimum_version>
     <qgis_maximum_version>4.99</qgis_maximum_version>
     <author_name>KomelT</author_name>
@@ -11,14 +11,14 @@
     <tracker><![CDATA[https://github.com/KomelT/qgis-rf-planner-plugin/issues]]></tracker>
     <repository><![CDATA[https://github.com/KomelT/qgis-rf-planner-plugin]]></repository>
     <icon><![CDATA[https://raw.githubusercontent.com/KomelT/qgis-rf-planner-plugin/master/qgis_rf_planner/icon.png]]></icon>
-    <file_name>qgis_rf_planner-v1.1.0.zip</file_name>
-    <download_url><![CDATA[https://github.com/KomelT/qgis-rf-planner-plugin/releases/download/v1.1.0/qgis_rf_planner-v1.1.0.zip]]></download_url>
+    <file_name>qgis_rf_planner-v1.2.0.zip</file_name>
+    <download_url><![CDATA[https://github.com/KomelT/qgis-rf-planner-plugin/releases/download/v1.2.0/qgis_rf_planner-v1.2.0.zip]]></download_url>
     <uploaded_by>KomelT</uploaded_by>
-    <create_date>2026-04-02</create_date>
-    <update_date>2026-04-02</update_date>
+    <create_date>2026-04-08</create_date>
+    <update_date>2026-04-08</update_date>
     <experimental>False</experimental>
     <deprecated>False</deprecated>
     <tags><![CDATA[qgis,rf,radio,coverage]]></tags>
-    <changelog><![CDATA[Automated release for v1.1.0]]></changelog>
+    <changelog><![CDATA[Automated release for v1.2.0]]></changelog>
   </pyqgis_plugin>
 </plugins>
