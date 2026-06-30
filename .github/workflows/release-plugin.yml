@@ -24,7 +24,13 @@ jobs:
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
-          echo "zip_name=qgis_rf_planner-v$VERSION.zip" >> "$GITHUB_OUTPUT"
+          # QGIS's plugin installer derives the install folder name by taking
+          # everything before the first "." in the zip file name (see
+          # pyplugin_installer/installer_data.py: fileName.partition(".")[0]).
+          # It expects the standard <plugin_id>.<version>.zip convention; a
+          # name like qgis_rf_planner-v1.3.0.zip splits at the dot inside the
+          # version and yields the wrong id, breaking repository installs.
+          echo "zip_name=qgis_rf_planner.$VERSION.zip" >> "$GITHUB_OUTPUT"
 
       - name: Regenerate plugins.xml
         run: |
