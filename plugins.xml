@@ -3,7 +3,7 @@
   <pyqgis_plugin name="RF Planner" version="1.3.0">
     <description><![CDATA[Native QGIS dock widget for RF site planning]]></description>
     <about><![CDATA[QGIS frontend for the RF planner API.]]></about>
-    <version>1.3.0</version>
+    <version>1.3.1</version>
     <qgis_minimum_version>4.0</qgis_minimum_version>
     <qgis_maximum_version>4.99</qgis_maximum_version>
     <author_name>KomelT</author_name>
