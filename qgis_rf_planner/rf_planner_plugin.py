@@ -1,9 +1,8 @@
 """Main QGIS plugin entry point for RF Planner."""
 
+import math
 import os
-import threading
 import time
-import urllib.request
 from urllib.parse import urlencode
 
 from qgis.PyQt.QtCore import Qt
@@ -48,6 +47,8 @@ class RFPlannerPlugin:
         self.api_client.coverageSubmitted.connect(self._on_coverage_submitted)
         self.api_client.coverageCompleted.connect(self._on_coverage_completed)
         self.api_client.coverageFailed.connect(self._on_coverage_failed)
+        self.api_client.coverageDownloaded.connect(self._add_downloaded_coverage_layer)
+        self.api_client.coverageDownloadFailed.connect(self._on_coverage_download_failed)
         self.api_client.debugMessage.connect(self._on_debug_message)
         QgsProject.instance().layerWillBeRemoved.connect(self._on_layer_will_be_removed)
         self._cleanup_orphan_radio_planning_files_on_startup()
@@ -120,8 +121,6 @@ class RFPlannerPlugin:
         latitude, longitude = content.coverage_location()
         payload = content.coverage_payload_defaults()
         payload.update({"lat": latitude, "lon": longitude})
-
-        PluginSettings.set_coverage_parameters(content.coverage_parameters())
 
         content.set_status("Submitting coverage task...")
         content.append_debug("Submitting coverage task...")
@@ -228,21 +227,15 @@ class RFPlannerPlugin:
         self._log_debug(f"WMS layer validation failed for task {task_id}.")
 
     def _download_and_save_coverage(self, task_id: str) -> None:
-        """Download coverage as GeoTIFF and save to radio-planning folder."""
-        threading.Thread(
-            target=self._download_coverage_worker,
-            args=(task_id,),
-            daemon=True,
-        ).start()
+        """Build the coverage download request and hand it off to the API client.
 
-    def _download_coverage_worker(self, task_id: str) -> None:
-        """Worker thread for downloading coverage file."""
-        import math
-        from urllib.parse import urlparse
-        
+        Only the actual network download/file write happens on a background
+        thread (inside ApiClient); everything here touches QGIS/dock-widget
+        objects and must stay on the main thread.
+        """
+        content = self._dock_content()
+
         try:
-            content = self._dock_content()
-
             project = QgsProject.instance()
             project_path = project.fileName()
 
@@ -256,34 +249,33 @@ class RFPlannerPlugin:
             project_dir = os.path.dirname(project_path)
             radio_planning_dir = os.path.join(project_dir, "radio-planning")
             os.makedirs(radio_planning_dir, exist_ok=True)
-            
+
             coverage_file = os.path.join(radio_planning_dir, f"coverage_{task_id}.tif")
-            
+
             # Get coverage parameters for bounding box calculation
             if content is None:
                 return
-                
+
             lat, lon = content.coverage_location()
             radius = content._coverage_radius.value()  # radius in km
-            
+
             # Calculate bounding box from radius
             # Approximate: 1 degree ≈ 111 km
             radius_degrees = radius / 111.0
             lat_offset = radius_degrees
             lon_offset = radius_degrees / math.cos(math.radians(lat)) if abs(lat) < 85 else radius_degrees
-            
+
             bbox_south = max(-90, lat - lat_offset)
             bbox_north = min(90, lat + lat_offset)
             bbox_west = max(-180, lon - lon_offset)
             bbox_east = min(180, lon + lon_offset)
-            
+
             # Build WMS GetMap URL for GeoTIFF
             geoserver_base_url = PluginSettings.get_geoserver_base_url()
             if not geoserver_base_url:
-                if content is not None:
-                    content.append_debug("No geoserver base URL available for download.")
+                content.append_debug("No geoserver base URL available for download.")
                 return
-            
+
             params = {
                 "service": "WMS",
                 "version": "1.1.0",
@@ -298,38 +290,20 @@ class RFPlannerPlugin:
             }
             query_string = urlencode(params)
             wms_url = f"{geoserver_base_url}/RF-SITE-PLANNER/wms?{query_string}"
-            
-            content.append_debug(f"Downloading coverage from: {wms_url}")
-            
-            # Download with proper headers (to bypass WAF/edge layers)
-            request = urllib.request.Request(url=wms_url, method="GET")
-            parsed = urlparse(wms_url)
-            origin = f"{parsed.scheme}://{parsed.netloc}"
-            
-            request.add_header(
-                "User-Agent",
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-            )
-            request.add_header("Accept", "*/*")
-            request.add_header("Origin", origin)
-            request.add_header("Referer", origin + "/")
-            
-            with urllib.request.urlopen(request, timeout=60) as response:
-                with open(coverage_file, "wb") as f:
-                    f.write(response.read())
-            
-            content.append_debug(f"Coverage saved to: {coverage_file}")
-            
-            # Add to QGIS with group
-            self._add_downloaded_coverage_layer(coverage_file, task_id)
-            
+
+            self.api_client.download_coverage(wms_url, coverage_file, task_id)
+
         except Exception as e:
             self._log_debug(f"Error downloading coverage: {e}")
-            content = self._dock_content()
             if content is not None:
                 content.set_status(f"Failed to download coverage: {e}", is_error=True)
                 content.append_debug(f"Download error: {e}")
+
+    def _on_coverage_download_failed(self, message: str) -> None:
+        content = self._dock_content()
+        if content is not None:
+            content.set_status(f"Failed to download coverage: {message}", is_error=True)
+            content.append_debug(f"Download error: {message}")
 
     def _add_downloaded_coverage_layer(self, file_path: str, task_id: str) -> None:
         """Add downloaded coverage to QGIS with Radio planning group."""
@@ -517,8 +491,6 @@ class RFPlannerPlugin:
         content.apiUrlChanged.connect(PluginSettings.set_api_url)
         content.pickCoordinatesRequested.connect(self._start_coordinate_pick)
         content.runCoverageRequested.connect(self.run_coverage)
-        content.saveParametersRequested.connect(self._save_coverage_parameters)
-        content.loadParametersRequested.connect(self._load_coverage_parameters)
         content.saveScenarioRequested.connect(self._save_scenario)
         content.loadScenarioRequested.connect(self._load_scenario)
         content.deleteScenarioRequested.connect(self._delete_scenario)
@@ -537,11 +509,6 @@ class RFPlannerPlugin:
         if self._restore_last_scenario():
             content.append_debug("Loaded last active scenario for this project.")
 
-        saved_params = PluginSettings.get_coverage_parameters()
-        if saved_params and not content.current_scenario_name():
-            content.set_coverage_parameters(saved_params)
-            content.append_debug("Loaded saved coverage parameters.")
-
     def _restore_previous_map_tool(self):
         canvas = self.iface.mapCanvas()
         if self._previous_map_tool is not None:
@@ -553,38 +520,6 @@ class RFPlannerPlugin:
         content = self._dock_content()
         if content is not None and hasattr(content, "append_debug"):
             content.append_debug(message)
-
-    def _save_coverage_parameters(self, params: dict) -> None:
-        content = self._dock_content()
-        PluginSettings.set_coverage_parameters(params)
-        scenario_name = content.current_scenario_name() if content is not None else ""
-        if scenario_name:
-            try:
-                PluginSettings.save_scenario(scenario_name, params)
-                self._refresh_scenarios(selected=scenario_name)
-            except ValueError as error:
-                if content is not None:
-                    content.set_status(str(error), is_error=True)
-                    content.append_debug(f"Scenario save failed: {error}")
-                return
-        if content is not None:
-            content.set_status("Coverage parameters saved.")
-            content.append_debug("Coverage parameters saved to QGIS settings.")
-
-    def _load_coverage_parameters(self) -> None:
-        content = self._dock_content()
-        if content is None:
-            return
-
-        params = PluginSettings.get_coverage_parameters()
-        if not params:
-            content.set_status("No saved coverage parameters found.", is_error=True)
-            content.append_debug("Load parameters requested, but no saved data exists.")
-            return
-
-        content.set_coverage_parameters(params)
-        content.set_status("Coverage parameters loaded.")
-        content.append_debug("Coverage parameters loaded from QGIS settings.")
 
     def _save_scenario(self, scenario_name: str, params: object) -> None:
         content = self._dock_content()

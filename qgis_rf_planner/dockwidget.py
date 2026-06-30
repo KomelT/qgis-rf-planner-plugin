@@ -26,8 +26,6 @@ class DockWidget(QWidget):
     apiUrlChanged = pyqtSignal(str)
     runCoverageRequested = pyqtSignal()
     pickCoordinatesRequested = pyqtSignal()
-    saveParametersRequested = pyqtSignal(dict)
-    loadParametersRequested = pyqtSignal()
     saveScenarioRequested = pyqtSignal(str, object)
     loadScenarioRequested = pyqtSignal(str)
     deleteScenarioRequested = pyqtSignal(str)
@@ -265,17 +263,6 @@ class DockWidget(QWidget):
         coverage_button_row.addWidget(self._coverage_run_button)
         coverage_layout.addLayout(coverage_button_row)
 
-        params_button_row = QHBoxLayout()
-        self._save_params_button = QPushButton("Save parameters", coverage_card)
-        self._load_params_button = QPushButton("Load parameters", coverage_card)
-        self._save_params_button.clicked.connect(
-            lambda: self.saveParametersRequested.emit(self.coverage_parameters())
-        )
-        self._load_params_button.clicked.connect(self.loadParametersRequested.emit)
-        params_button_row.addWidget(self._save_params_button)
-        params_button_row.addWidget(self._load_params_button)
-        coverage_layout.addLayout(params_button_row)
-
         content_layout.addWidget(title)
         content_layout.addWidget(subtitle)
         content_layout.addWidget(api_card)
@@ -395,6 +382,7 @@ class DockWidget(QWidget):
         lat, lon = self.coverage_location()
         data["lat"] = lat
         data["lon"] = lon
+        data["download_after_coverage"] = self._coverage_download.isChecked()
         return data
 
     def set_coverage_parameters(self, params: dict) -> None:
@@ -435,6 +423,7 @@ class DockWidget(QWidget):
 
         self._coverage_high_resolution.setChecked(bool(params.get("high_resolution", self._coverage_high_resolution.isChecked())))
         self._coverage_itm_mode.setChecked(bool(params.get("itm_mode", self._coverage_itm_mode.isChecked())))
+        self._coverage_download.setChecked(bool(params.get("download_after_coverage", self._coverage_download.isChecked())))
         self._suspend_dirty_tracking = False
         self.set_scenario_dirty(False)
 

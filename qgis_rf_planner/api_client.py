@@ -17,6 +17,8 @@ class ApiClient(QObject):
     coverageSubmitted = pyqtSignal(str)
     coverageCompleted = pyqtSignal(str)
     coverageFailed = pyqtSignal(str)
+    coverageDownloaded = pyqtSignal(str, str)  # file_path, task_id
+    coverageDownloadFailed = pyqtSignal(str)
     debugMessage = pyqtSignal(str)
 
     def __init__(self, parent: Optional[QObject] = None):
@@ -31,6 +33,41 @@ class ApiClient(QObject):
             args=(base_url, payload),
             daemon=True,
         ).start()
+
+    def download_coverage(self, wms_url: str, file_path: str, task_id: str) -> None:
+        threading.Thread(
+            target=self._download_coverage_worker,
+            args=(wms_url, file_path, task_id),
+            daemon=True,
+        ).start()
+
+    def _download_coverage_worker(self, wms_url: str, file_path: str, task_id: str) -> None:
+        try:
+            self._debug(f"Downloading coverage from: {wms_url}")
+
+            request = urllib.request.Request(url=wms_url, method="GET")
+            parsed = urlparse(wms_url)
+            origin = f"{parsed.scheme}://{parsed.netloc}"
+
+            # Some edge/WAF layers are stricter with non-browser user agents.
+            request.add_header(
+                "User-Agent",
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            )
+            request.add_header("Accept", "*/*")
+            request.add_header("Origin", origin)
+            request.add_header("Referer", origin + "/")
+
+            with urllib.request.urlopen(request, timeout=60) as response:
+                with open(file_path, "wb") as f:
+                    f.write(response.read())
+
+            self._debug(f"Coverage saved to: {file_path}")
+            self.coverageDownloaded.emit(file_path, task_id)
+        except Exception as error:
+            self._debug(f"Coverage download error: {error}")
+            self.coverageDownloadFailed.emit(str(error))
 
     def _test_connection_worker(self, base_url: str) -> None:
         endpoint = self._build_url(base_url, "openapi.json")

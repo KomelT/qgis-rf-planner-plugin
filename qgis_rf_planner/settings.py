@@ -10,7 +10,6 @@ from qgis.core import QgsProject
 
 class PluginSettings:
     API_URL_KEY = "rf_planner/api_url"
-    COVERAGE_PARAMETERS_KEY = "rf_planner/coverage_parameters"
     SCENARIO_STORE_PREFIX = "rf_planner/scenarios"
 
     @classmethod
@@ -50,20 +49,6 @@ class PluginSettings:
         if api_url.endswith("/api"):
             return api_url[:-4] + "/geoserver"
         return api_url.replace("/api", "/geoserver")
-
-    @classmethod
-    def set_coverage_parameters(cls, params: dict) -> None:
-        QSettings().setValue(cls.COVERAGE_PARAMETERS_KEY, json.dumps(params))
-
-    @classmethod
-    def get_coverage_parameters(cls) -> dict:
-        raw = QSettings().value(cls.COVERAGE_PARAMETERS_KEY, "", type=str)
-        if not raw:
-            return {}
-        try:
-            return json.loads(raw)
-        except json.JSONDecodeError:
-            return {}
 
     @classmethod
     def _project_scope_key(cls) -> str:
