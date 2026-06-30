@@ -11,8 +11,8 @@
     <tracker><![CDATA[https://github.com/KomelT/qgis-rf-planner-plugin/issues]]></tracker>
     <repository><![CDATA[https://github.com/KomelT/qgis-rf-planner-plugin]]></repository>
     <icon><![CDATA[https://raw.githubusercontent.com/KomelT/qgis-rf-planner-plugin/master/qgis_rf_planner/icon.png]]></icon>
-    <file_name>qgis_rf_planner-v1.3.1.zip</file_name>
-    <download_url><![CDATA[https://github.com/KomelT/qgis-rf-planner-plugin/releases/download/v1.3.1/qgis_rf_planner-v1.3.1.zip]]></download_url>
+    <file_name>qgis_rf_planner.1.3.1.zip</file_name>
+    <download_url><![CDATA[https://github.com/KomelT/qgis-rf-planner-plugin/releases/download/v1.3.1/qgis_rf_planner.1.3.1.zip]]></download_url>
     <uploaded_by>KomelT</uploaded_by>
     <create_date>2026-06-30</create_date>
     <update_date>2026-06-30</update_date>
