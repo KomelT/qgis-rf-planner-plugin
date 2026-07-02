@@ -51,11 +51,16 @@ class RFPlannerPlugin:
         self.api_client.coverageDownloadFailed.connect(self._on_coverage_download_failed)
         self.api_client.debugMessage.connect(self._on_debug_message)
         QgsProject.instance().layerWillBeRemoved.connect(self._on_layer_will_be_removed)
+        QgsProject.instance().fileNameChanged.connect(self._on_project_file_name_changed)
         self._cleanup_orphan_radio_planning_files_on_startup()
 
     def unload(self):
         try:
             QgsProject.instance().layerWillBeRemoved.disconnect(self._on_layer_will_be_removed)
+        except TypeError:
+            pass
+        try:
+            QgsProject.instance().fileNameChanged.disconnect(self._on_project_file_name_changed)
         except TypeError:
             pass
         if self.action is not None:
@@ -506,6 +511,14 @@ class RFPlannerPlugin:
 
         self._refresh_scenarios()
 
+        if self._restore_last_scenario():
+            content.append_debug("Loaded last active scenario for this project.")
+
+    def _on_project_file_name_changed(self) -> None:
+        content = self._dock_content()
+        if content is None:
+            return
+        self._refresh_scenarios()
         if self._restore_last_scenario():
             content.append_debug("Loaded last active scenario for this project.")
 
